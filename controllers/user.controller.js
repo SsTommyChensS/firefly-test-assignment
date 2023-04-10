@@ -162,14 +162,60 @@ const removeUserById = async(req, res) => {
 
 //6. Find n users have the coordinate nearest with the chosen userID coordinate (Not done yet)
 const findUsersNear = async(req, res) => {
-    //const n = req.query.n;
-    //const userId = req.query.userId;
+    const n = req.query.n;
+    const userId = req.query.userId;
+
+    if(n <= 0) {
+        return res.status(400).send({
+            success: false,
+            message: `Unvalid n!`,
+        });
+    }
+
     try {
-        let coordinates = await User.find().select({ coordinate: 1 });
+        let distance_information = [];
+        //Find coordinate of userId given
+        let user_coordinate = await User.findById(userId).select({ coordinate: 1 });
+        if(!user_coordinate) {
+            return res.status(400).send({
+                success: false,
+                message: `Cannot find user with _id ${userId} !`
+            });
+        }   
+
+        let x_user = parseInt(user_coordinate.coordinate.slice(0, 3));
+        let y_user = parseInt(user_coordinate.coordinate.slice(4));
+
+        //Find coordinate of other users
+        let others_coordinate = await User.find({ _id: {
+                $nin: userId
+        }}).select({ coordinate: 1 });
+        //Calculate the distance of 2 points (userID and each other user coordinate)
+        others_coordinate.forEach(element => {
+            let x_other_user = parseInt(element.coordinate.slice(0, 3));
+            let y_other_user = parseInt(element.coordinate.slice(4));
+            
+            let distance = Math.sqrt(Math.pow(x_user - x_other_user, 2) + Math.pow(y_user - y_other_user, 2));
+
+            distance_information.push({
+                _id: element.id,
+                coordinate: element.coordinate,
+                distance: distance
+            });
+        });
+        //Sort distance from closest -> furthest 
+        distance_information.sort((a, b) => (a.distance > b.distance) ? 1 : -1);
+        //Get n users from the query that has closest distance with userID
+        const result = distance_information.slice(0, n);
 
         res.status(200).send({
-            data: coordinates
+            success: true,
+            data: {
+                n: n,
+                users: result
+            }
         });
+
     } catch (error) {
         return res.status(500).send({
             success: false,
